@@ -20,6 +20,26 @@
   Agent ID wallet — the gate works live against the real registry)
 - `hasAgentId(deployer)` = false (deployer holds no Agent ID, as expected)
 
+## Source verification
+
+- **Sourcify: EXACT MATCH** (creation + runtime), verified 2026-11-18
+  13:05 UTC, matchId 59469254 —
+  https://sourcify.dev/#/lookup/0x3bffba48f59988b53d275cb49b03a7d4628a04b7
+- Sourcify automatically propagated the verification to the Etherscan-family
+  backend (BscScan) in the same job (external verification id
+  kves356gfpbuyskbrz9i2y1nvt6fxqpsf5fg8ff66mctfc88y9). The BscScan web page
+  itself returns 403 to this server's fetches (bot protection), so the green
+  "verified" display on bscscan.com could not be screenshot-confirmed from
+  here — check the address page in a normal browser; if it does not show as
+  verified, the fallback is a manual verify on BscScan (free account,
+  user-side) with: solc 0.8.26, optimizer on, 200 runs, source
+  `contracts/AgentWall.sol`, constructor arg = the registry address (ABI-encoded).
+
+## Public surfaces
+
+- Repo: https://github.com/aan192/agentwall
+- Live dApp (GitHub Pages): https://aan192.github.io/agentwall/
+
 ## Tests
 
 Local suite (eth-tester/py-evm vs a mock registry): **24/24 checks passed**
