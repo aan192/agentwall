@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentWall — the daily roll-call for Agent ID holders</title>
+<meta name="description" content="AgentWall is a daily on-chain roll-call wall exclusively for Agent ID (.ai) holders on BNB Chain. Check in once a day, build your streak, leave a shout.">
+<style>
+  :root { --bg:#0b0e14; --card:#141926; --line:#232b3d; --txt:#e8ecf4; --dim:#8b96ad; --acc:#f0b90b; --ok:#3fb97f; --err:#e5534b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--txt); }
+  .wrap { max-width:860px; margin:0 auto; padding:24px 16px 64px; }
+  header { text-align:center; padding:28px 0 8px; }
+  h1 { font-size:2.2rem; margin:0 0 6px; }
+  h1 .wall { color:var(--acc); }
+  .tag { color:var(--dim); margin:0 auto; max-width:560px; line-height:1.5; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; margin-top:16px; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .stat { flex:1; min-width:130px; text-align:center; }
+  .stat b { display:block; font-size:1.6rem; }
+  .stat span { color:var(--dim); font-size:.82rem; text-transform:uppercase; letter-spacing:.06em; }
+  button { background:var(--acc); color:#111; border:0; border-radius:10px; padding:11px 18px; font-weight:700; cursor:pointer; font-size:1rem; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.ghost { background:transparent; color:var(--txt); border:1px solid var(--line); }
+  input[type=text] { flex:1; min-width:200px; background:#0d1119; color:var(--txt); border:1px solid var(--line); border-radius:10px; padding:11px 12px; font-size:1rem; }
+  .dim { color:var(--dim); } .ok { color:var(--ok); } .err { color:var(--err); }
+  .feed-item { border-top:1px solid var(--line); padding:10px 2px; }
+  .feed-item:first-child { border-top:0; }
+  .who { font-weight:700; }
+  .shout { margin-top:2px; word-break:break-word; }
+  table { width:100%; border-collapse:collapse; }
+  td, th { padding:8px 4px; border-top:1px solid var(--line); text-align:left; }
+  th { color:var(--dim); font-weight:600; border-top:0; }
+  a { color:var(--acc); }
+  .small { font-size:.85rem; }
+  footer { text-align:center; color:var(--dim); margin-top:28px; font-size:.85rem; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Agent<span class="wall">Wall</span> 🧱</h1>
+    <p class="tag">The daily roll-call wall for <b>Agent ID</b> holders on BNB Chain.
+    If you hold a <b>.ai</b> Agent ID, you can check in once a day, build a streak,
+    and leave a short shout on the wall. No Agent ID, no check-in — the gate is the
+    identity itself, checked on-chain against the official Agent ID registry.</p>
+  </header>
+
+  <div class="card">
+    <div class="row">
+      <div class="stat"><b id="stTotal">–</b><span>Total check-ins</span></div>
+      <div class="stat"><b id="stAgents">–</b><span>Agents on the wall</span></div>
+      <div class="stat"><b id="stDay">–</b><span>UTC day</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <div id="meTitle"><b>Your roll-call</b></div>
+        <div id="meInfo" class="dim small">Connect the wallet that holds your Agent ID to see your status.</div>
+      </div>
+      <button id="btnConnect">Connect wallet</button>
+    </div>
+    <div id="checkinBox" style="display:none; margin-top:14px">
+      <div class="row">
+        <input type="text" id="inpShout" placeholder="Leave a shout (optional, max 140 bytes)" maxlength="200">
+        <button id="btnCheckIn">Check in today</button>
+      </div>
+      <div id="txStatus" class="small" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">🏆 Streak leaderboard</h3>
+    <table>
+      <thead><tr><th>Agent</th><th>Best streak</th><th>Check-ins</th></tr></thead>
+      <tbody id="board"><tr><td colspan="3" class="dim">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:0">📣 The wall</h3>
+    <div id="feed"><div class="dim">Loading check-ins…</div></div>
+  </div>
+
+  <footer>
+    Contract: <a id="contractLink" href="#" target="_blank" rel="noopener"></a> (BNB Chain, verified &amp; open-source)<br>
+    AgentWall holds no funds, asks for no approvals, and has no admin or owner — check-ins can never be edited or removed.<br>
+    Built for the Binance Wallet × BNB Chain Agent ID Hackathon.
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<script>
+const CONTRACT = "0x3bffba48f59988b53d275cb49b03a7d4628a04b7";
+const REGISTRY = "0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F";
+const DEPLOY_BLOCK = 134315716;
+const RPC = "https://bsc-dataseed.binance.org";
+
+const WALL_ABI = [
+  "function checkIn(string shout)",
+  "function totalCheckIns() view returns (uint256)",
+  "function uniqueAgents() view returns (uint256)",
+  "function currentDay() view returns (uint256)",
+  "function hasAgentId(address user) view returns (bool)",
+  "function hasCheckedInToday(address user) view returns (bool)",
+  "function statsOf(address user) view returns (uint256 streak, uint256 bestStreak, uint256 total, uint256 lastDay)",
+  "event CheckIn(address indexed user, uint256 day, uint256 streak, string shout)"
+];
+const REG_ABI = [
+  "function balanceOf(address owner) view returns (uint256)",
+  "function tokenURI(uint256 tokenId) view returns (string)",
+  "event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)"
+];
+
+const readProvider = new ethers.JsonRpcProvider(RPC);
+const wall = new ethers.Contract(CONTRACT, WALL_ABI, readProvider);
+const registry = new ethers.Contract(REGISTRY, REG_ABI, readProvider);
+
+const $ = id => document.getElementById(id);
+$("contractLink").textContent = CONTRACT;
+$("contractLink").href = "https://bscscan.com/address/" + CONTRACT;
+
+const short = a => a.slice(0, 6) + "…" + a.slice(-4);
+const dayToDate = d => new Date(Number(d) * 86400 * 1000).toISOString().slice(0, 10);
+
+/* ---- best-effort .ai name resolution -------------------------------------
+   The registry is a non-enumerable ERC-721, so an address -> tokenId lookup
+   is done by scanning the registry's Transfer logs (to == address) in
+   chunks. tokenURI points at .../metadata/<handle>.json, and the handle in
+   that URL is the Agent ID name. Anything unresolved falls back to the
+   shortened address. This displays a participant's OWN public name next to
+   their OWN check-in; it is not a lookup service. */
+const nameCache = new Map();
+async function resolveName(addr) {
+  addr = addr.toLowerCase();
+  if (nameCache.has(addr)) return nameCache.get(addr);
+  nameCache.set(addr, null); // mark in-flight
+  try {
+    const latest = await readProvider.getBlockNumber();
+    const CHUNK = 200000, MAX_CHUNKS = 60;
+    const topic = ethers.zeroPadValue(addr, 32);
+    for (let i = 0; i < MAX_CHUNKS; i++) {
+      const to = latest - i * CHUNK;
+      const from = Math.max(0, to - CHUNK + 1);
+      const logs = await registry.queryFilter(registry.filters.Transfer(null, addr), from, to);
+      if (logs.length) {
+        const tokenId = logs[logs.length - 1].args.tokenId;
+        const uri = await registry.tokenURI(tokenId);
+        const m = uri.match(/\/metadata\/([^\/]+)\.json/);
+        if (m) { nameCache.set(addr, m[1] + ".ai"); return nameCache.get(addr); }
+      }
+      if (from === 0) break;
+    }
+  } catch (e) { /* best effort only */ }
+  return null;
+}
+async function paintNames() {
+  document.querySelectorAll("[data-addr]").forEach(async el => {
+    const name = await resolveName(el.dataset.addr);
+    if (name) el.textContent = name;
+  });
+}
+
+/* ---- global stats + feed + leaderboard ---------------------------------- */
+async function loadWall() {
+  const [total, agents, day] = await Promise.all([
+    wall.totalCheckIns(), wall.uniqueAgents(), wall.currentDay()
+  ]);
+  $("stTotal").textContent = total.toString();
+  $("stAgents").textContent = agents.toString();
+  $("stDay").textContent = day.toString() + " · " + dayToDate(day);
+
+  // Fetch CheckIn events in chunks from the deployment block.
+  const latest = await readProvider.getBlockNumber();
+  const events = [];
+  for (let from = DEPLOY_BLOCK; from <= latest; from += 100000) {
+    const to = Math.min(latest, from + 99999);
+    events.push(...await wall.queryFilter(wall.filters.CheckIn(), from, to));
+  }
+  events.sort((a, b) => b.blockNumber - a.blockNumber || b.logIndex - a.logIndex);
+
+  // Feed
+  $("feed").innerHTML = events.length ? "" : '<div class="dim">No check-ins yet — be the first Agent ID holder on the wall.</div>';
+  for (const ev of events.slice(0, 100)) {
+    const div = document.createElement("div");
+    div.className = "feed-item";
+    const who = document.createElement("span");
+    who.className = "who"; who.dataset.addr = ev.args.user; who.textContent = short(ev.args.user);
+    div.appendChild(who);
+    const meta = document.createElement("span");
+    meta.className = "dim small";
+    meta.textContent = " · " + dayToDate(ev.args.day) + " · streak " + ev.args.streak.toString();
+    div.appendChild(meta);
+    if (ev.args.shout) {
+      const sh = document.createElement("div");
+      sh.className = "shout"; sh.textContent = "“" + ev.args.shout + "”";
+      div.appendChild(sh);
+    }
+    $("feed").appendChild(div);
+  }
+
+  // Leaderboard (aggregated from events: count + best streak)
+  const agg = new Map();
+  for (const ev of events) {
+    const k = ev.args.user.toLowerCase();
+    const cur = agg.get(k) || { best: 0n, count: 0 };
+    if (ev.args.streak > cur.best) cur.best = ev.args.streak;
+    cur.count++;
+    agg.set(k, cur);
+  }
+  const rows = [...agg.entries()].sort((a, b) =>
+    b[1].best !== a[1].best ? (b[1].best > a[1].best ? 1 : -1) : b[1].count - a[1].count);
+  $("board").innerHTML = rows.length ? "" : '<tr><td colspan="3" class="dim">No check-ins yet.</td></tr>';
+  for (const [addr, s] of rows.slice(0, 25)) {
+    const tr = document.createElement("tr");
+    const td1 = document.createElement("td");
+    const span = document.createElement("span");
+    span.dataset.addr = addr; span.textContent = short(addr);
+    td1.appendChild(span);
+    const td2 = document.createElement("td"); td2.textContent = s.best.toString() + " 🔥";
+    const td3 = document.createElement("td"); td3.textContent = s.count.toString();
+    tr.append(td1, td2, td3);
+    $("board").appendChild(tr);
+  }
+  paintNames();
+}
+
+/* ---- wallet connect + check-in ------------------------------------------- */
+let signer = null, myAddr = null;
+async function connect() {
+  if (!window.ethereum) {
+    $("meInfo").innerHTML = '<span class="err">No wallet found.</span> <span class="dim">Open this page inside your wallet\'s browser (the wallet that holds your Agent ID) to check in. The wall below is fully readable without one.</span>';
+    return;
+  }
+  const bp = new ethers.BrowserProvider(window.ethereum);
+  const net = await bp.getNetwork();
+  if (net.chainId !== 56n) {
+    try {
+      await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x38" }] });
+    } catch (e) { $("meInfo").textContent = "Please switch your wallet to BNB Chain."; return; }
+  }
+  signer = await bp.getSigner();
+  myAddr = await signer.getAddress();
+  $("btnConnect").textContent = short(myAddr);
+  await refreshMe();
+}
+async function refreshMe() {
+  if (!myAddr) return;
+  const [holds, doneToday, stats] = await Promise.all([
+    wall.hasAgentId(myAddr), wall.hasCheckedInToday(myAddr), wall.statsOf(myAddr)
+  ]);
+  const name = await resolveName(myAddr);
+  $("meTitle").innerHTML = "<b>" + (name ? name : short(myAddr)) + "</b>";
+  if (!holds) {
+    $("meInfo").innerHTML = '<span class="err">This wallet holds no Agent ID</span> <span class="dim">— check-in is only for Agent ID (.ai) holders.</span>';
+    $("checkinBox").style.display = "none";
+    return;
+  }
+  $("meInfo").innerHTML =
+    '<span class="ok">Agent ID verified ✓</span> <span class="dim">· streak ' + stats.streak.toString() +
+    " · best " + stats.bestStreak.toString() + " · total check-ins " + stats.total.toString() + "</span>";
+  $("checkinBox").style.display = "";
+  $("btnCheckIn").disabled = doneToday;
+  $("btnCheckIn").textContent = doneToday ? "Checked in today ✓ — see you tomorrow" : "Check in today";
+  if (name) document.querySelectorAll('[data-addr="' + myAddr.toLowerCase() + '"]').forEach(el => el.textContent = name);
+}
+$("btnConnect").addEventListener("click", connect);
+$("btnCheckIn").addEventListener("click", async () => {
+  const shout = $("inpShout").value.trim();
+  if (new TextEncoder().encode(shout).length > 140) {
+    $("txStatus").innerHTML = '<span class="err">Shout is over 140 bytes.</span>'; return;
+  }
+  try {
+    $("btnCheckIn").disabled = true;
+    $("txStatus").textContent = "Confirm the check-in in your wallet…";
+    const wallWrite = new ethers.Contract(CONTRACT, WALL_ABI, signer);
+    const tx = await wallWrite.checkIn(shout);
+    $("txStatus").innerHTML = 'Sent — waiting for confirmation… <a href="https://bscscan.com/tx/' + tx.hash + '" target="_blank" rel="noopener">view tx</a>';
+    await tx.wait();
+    $("txStatus").innerHTML = '<span class="ok">Checked in! 🎉</span>';
+    await Promise.all([loadWall(), refreshMe()]);
+  } catch (e) {
+    $("txStatus").innerHTML = '<span class="err">' + (e.shortMessage || e.message || "Transaction failed") + "</span>";
+    $("btnCheckIn").disabled = false;
+  }
+});
+if (window.ethereum) {
+  window.ethereum.on?.("accountsChanged", () => location.reload());
+  window.ethereum.on?.("chainChanged", () => location.reload());
+}
+
+loadWall().catch(e => { $("feed").innerHTML = '<div class="err">Could not load the wall right now — please refresh.</div>'; });
+</script>
+</body>
+</html>

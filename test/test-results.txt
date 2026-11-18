@@ -1,0 +1,33 @@
+Mock registry: 0xF2E246BB76DF876Cef8b38ae84130F4F55De395b
+AgentWall:     0x2946259E0334f33A064106302415aD3391BeD384
+
+Chain day index: 20776
+-- day 1 --
+  [PASS] non-holder check-in reverts 
+  [PASS] CheckIn event emitted 
+  [PASS] streakOf(alice) == 1 
+  [PASS] bestStreakOf(alice) == 1 
+  [PASS] totalCheckInsOf(alice) == 1 
+  [PASS] hasCheckedInToday(alice) 
+  [PASS] global totalCheckIns == 1 
+  [PASS] uniqueAgents == 1 
+  [PASS] same-day second check-in reverts 
+  [PASS] 141-byte shout reverts 
+  [PASS] 140-byte shout accepted 
+  [PASS] uniqueAgents == 2 after Bob 
+  [PASS] global totalCheckIns == 2 
+-- day 2 --
+  [PASS] streak increments to 2 on consecutive day 
+  [PASS] bestStreakOf(alice) == 2 
+  [PASS] hasCheckedInToday(alice) on day 2 
+  [PASS] Bob has NOT checked in on day 2 
+-- day 4 (day 3 skipped) --
+  [PASS] streakOf(alice) reads 0 live after gap (before check-in) 
+  [PASS] streak resets to 1 after gap 
+  [PASS] bestStreakOf(alice) still 2 
+  [PASS] totalCheckInsOf(alice) == 3 
+  [PASS] lastCheckInDayOf(alice) == day 4 index 
+  [PASS] empty shout accepted, streak 2 again 
+  [PASS] check-in reverts after Agent ID revoked 
+
+==== 24/24 checks passed ====
